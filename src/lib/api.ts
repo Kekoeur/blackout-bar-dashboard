@@ -1,6 +1,7 @@
 // apps/bar-dashboard/src/lib/api.ts
 
 import axios from 'axios';
+import { useAuthStore } from '@/store/authStore';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3026/api/v1',
@@ -9,40 +10,36 @@ const api = axios.create({
   },
 });
 
-// Interceptor pour ajouter le token
+// =======================
+// REQUEST INTERCEPTOR
+// =======================
 api.interceptors.request.use(
   (config) => {
-    // Lire le token depuis localStorage à chaque requête
-    const token = localStorage.getItem('bar_dashboard_token');
-    
-    console.log('🔐 [API Interceptor] Token found:', token ? 'YES' : 'NO'); // ⭐ DEBUG
-    
+    // ⚠️ IMPORTANT : PAS localStorage direct
+    const token = useAuthStore.getState().token;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// ⭐ Interceptor pour gérer les erreurs 401
+// =======================
+// RESPONSE INTERCEPTOR
+// =======================
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.error('❌ [API] 401 Unauthorized - Token invalide ou expiré');
-      
-      // Supprimer le token invalide
-      localStorage.removeItem('bar_dashboard_token');
-      
-      // Rediriger vers login
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
+      console.warn('⚠️ [API] 401 Unauthorized — token invalide ou expiré');
+      // ❌ PAS de logout ici
+      // ❌ PAS de redirect ici
+      // 👉 AuthGuard s’en charge
     }
+
     return Promise.reject(error);
   }
 );
