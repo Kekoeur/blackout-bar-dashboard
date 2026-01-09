@@ -8,14 +8,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { useBarStore } from '@/store/barStore';
 import { barsApi } from '@/lib/api';
-import { Plus, Store, Users, TrendingUp, Clock } from 'lucide-react';
+import { Power, Plus, Store, ChevronRight, AlertTriangle, CheckCircle, Crown, Shield, Users as UsersIcon, Eye } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { bars, setBars, selectedBar, setSelectedBar } = useBarStore();
+  const { setBars, setSelectedBar } = useBarStore();
 
   // Rediriger si non authentifié
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   }, [isAuthenticated, router]);
 
   // Charger les bars
-  const { data, isLoading } = useQuery({
+  const { data: bars, isLoading } = useQuery({
     queryKey: ['my-bars'],
     queryFn: async () => {
       const { data } = await barsApi.getMyBars();
@@ -35,14 +35,45 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    if (data) {
-      setBars(data);
+    if (bars) {
+      setBars(bars);
       // Sélectionner le premier bar par défaut
-      if (data.length > 0 && !selectedBar) {
-        setSelectedBar(data[0]);
+      if (bars.length > 0) {
+        setSelectedBar(bars[0]);
       }
     }
-  }, [data, setBars, selectedBar, setSelectedBar]);
+  }, [bars, setBars, setSelectedBar]);
+
+  // Helper pour les icônes de rôle
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'OWNER': return Crown;
+      case 'MANAGER': return Shield;
+      case 'STAFF': return UsersIcon;
+      case 'VIEWER': return Eye;
+      default: return Eye;
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'OWNER': return 'Propriétaire';
+      case 'MANAGER': return 'Manager';
+      case 'STAFF': return 'Staff';
+      case 'VIEWER': return 'Viewer';
+      default: return role;
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'OWNER': return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'MANAGER': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+      case 'STAFF': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'VIEWER': return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
+  };
 
   if (isLoading) {
     return (
@@ -53,32 +84,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-white">
-                🍸 Bar Dashboard
-              </h1>
-              <p className="text-slate-400 text-sm">
-                Bienvenue, {user?.name}
-              </p>
-            </div>
-            <Link
-              href="/bars/new"
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
-            >
-              <Plus size={20} />
-              Nouveau bar
-            </Link>
+    <div className="min-h-screen bg-slate-900 py-8">
+      <div className="container mx-auto px-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              Mes Bars
+            </h1>
+            <p className="text-slate-400">
+              {bars?.length || 0} bar{bars && bars.length > 1 ? 's' : ''}
+            </p>
           </div>
         </div>
-      </header>
 
-      <div className="container mx-auto px-6 py-8">
-        {bars.length === 0 ? (
+        {bars && bars.length === 0 ? (
           // État vide
           <div className="bg-slate-800 rounded-2xl p-12 text-center border border-slate-700">
             <Store size={64} className="mx-auto text-slate-600 mb-4" />
@@ -88,92 +108,87 @@ export default function DashboardPage() {
             <p className="text-slate-400 mb-6">
               Créez votre premier bar pour commencer à gérer vos commandes
             </p>
-            <Link
-              href="/bars/new"
+            <button
+              onClick={() => router.push('/bars/new')}
               className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
               <Plus size={20} />
               Créer mon premier bar
-            </Link>
+            </button>
           </div>
         ) : (
           // Liste des bars
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {bars.map((bar) => (
-              <Link
-                key={bar.id}
-                href={`/bars/${bar.id}`}
-                className="group bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500 transition-all"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-white group-hover:text-orange-500 transition-colors">
-                      {bar.name}
-                    </h3>
-                    <p className="text-slate-400 text-sm">
-                      {bar.city} • {bar.address}
-                    </p>
+            {bars?.map((bar: any) => {
+              const RoleIcon = getRoleIcon(bar.role);
+              
+              return (
+                <Link
+                  key={bar.id}
+                  href={`/bars/${bar.id}`}
+                  className="group bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500 transition-all cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
+                        <Store className="text-white" size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-white group-hover:text-orange-400 transition-colors">
+                          {bar.name}
+                        </h3>
+                        <p className="text-slate-400 text-sm">{bar.city}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="text-slate-400 group-hover:text-orange-400 transition-colors" />
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      bar.role === 'OWNER'
-                        ? 'bg-purple-500/20 text-purple-400'
-                        : bar.role === 'MANAGER'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : bar.role === 'STAFF'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-slate-500/20 text-slate-400'
-                    }`}
-                  >
-                    {bar.role === 'OWNER'
-                      ? '👑 Propriétaire'
-                      : bar.role === 'MANAGER'
-                      ? '👔 Gérant'
-                      : bar.role === 'STAFF'
-                      ? '👨‍💼 Staff'
-                      : '👁️ Lecteur'}
-                  </span>
-                </div>
 
-                {/* Statistiques */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-700/50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-orange-400 mb-1">
-                      <Clock size={16} />
-                      <span className="text-xs font-medium">En attente</span>
-                    </div>
-                    <div className="text-2xl font-bold text-white">
-                      {bar.pendingOrders || 0}
-                    </div>
-                  </div>
-                  <div className="bg-slate-700/50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-purple-400 mb-1">
-                      <Users size={16} />
-                      <span className="text-xs font-medium">Photos</span>
-                    </div>
-                    <div className="text-2xl font-bold text-white">
-                      {bar.pendingPhotos || 0}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Badge actif/inactif */}
-                <div className="mt-4 pt-4 border-t border-slate-700">
-                  <span
-                    className={`inline-flex items-center gap-2 text-sm ${
-                      bar.active ? 'text-green-400' : 'text-red-400'
-                    }`}
-                  >
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        bar.active ? 'bg-green-400' : 'bg-red-400'
+                  {/* ⭐ Badges statut + rôle */}
+                  <div className="flex gap-2 mb-4">
+                    {/* Badge statut */}
+                    <span
+                      className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${
+                        bar.active
+                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                          : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
                       }`}
-                    />
-                    {bar.active ? 'Actif' : 'Inactif'}
-                  </span>
-                </div>
-              </Link>
-            ))}
+                    >
+                      {bar.active ? (
+                        <>
+                          <CheckCircle size={12} />
+                          Actif
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle size={12} />
+                          Inactif
+                        </>
+                      )}
+                    </span>
+
+                    {/* Badge rôle */}
+                    <span className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${getRoleColor(bar.role)}`}>
+                      <RoleIcon size={12} />
+                      {getRoleLabel(bar.role)}
+                    </span>
+                  </div>
+
+                  <div className="text-slate-400 text-sm mb-4">
+                    📍 {bar.address}
+                  </div>
+
+                  {/* ⭐ Message si inactif et owner */}
+                  {!bar.active && bar.role === 'OWNER' && (
+                    <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                      <p className="text-orange-400 text-xs flex items-center gap-2">
+                        <Power size={14} />
+                        Cliquez pour activer votre bar
+                      </p>
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

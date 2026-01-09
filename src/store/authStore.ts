@@ -13,6 +13,7 @@ interface BarUser {
   id: string;
   email: string;
   name: string;
+  isSuperAdmin?: boolean; // ⭐ AJOUTER
   bars: Bar[];
 }
 
@@ -32,10 +33,18 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       
       login: (token, user) => {
+        console.log('✅ [AuthStore] Login called'); // ⭐ DEBUG
+        console.log('✅ [AuthStore] Token:', token.substring(0, 20) + '...'); // ⭐ DEBUG
+        console.log('✅ [AuthStore] User:', user); // ⭐ DEBUG
+        
+        localStorage.setItem('bar_dashboard_token', token);
         set({ token, user, isAuthenticated: true });
       },
       
       logout: () => {
+        console.log('🚪 [AuthStore] Logout called'); // ⭐ DEBUG
+        
+        localStorage.removeItem('bar_dashboard_token');
         set({ token: null, user: null, isAuthenticated: false });
       },
     }),

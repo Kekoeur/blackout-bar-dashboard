@@ -18,9 +18,9 @@ interface MenuDrink {
     id: string;
     name: string;
     type: string;
-    alcoholLevel: number;
+    alcoholLevel?: number;
     imageUrl: string;
-    ingredients: string[];
+    ingredients?: string[];
     description?: string;
   };
 }
@@ -29,9 +29,9 @@ interface Drink {
   id: string;
   name: string;
   type: string;
-  alcoholLevel: number;
+  alcoholLevel?: number;
   imageUrl: string;
-  ingredients: string[];
+  ingredients?: string[];
   description?: string;
 }
 
@@ -65,9 +65,10 @@ export default function MenuPage() {
   });
 
   // Mutation pour ajouter un drink
-  const addDrinkMutation = useMutation({
-    mutationFn: async ({ drinkId, price }: { drinkId: string; price: number }) => {
-      await api.post(`/drinks/menu/${barId}`, { drinkId, price });
+  const addDrinksMutation = useMutation({
+    mutationFn: async (drinks: Array<{ drinkId: string; price: number }>) => {
+      const { menuApi } = await import('@/lib/api');
+      await menuApi.addDrinksToMenuBulk(barId, drinks);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bar-menu', barId] });
@@ -275,8 +276,8 @@ export default function MenuPage() {
           <AddDrinkModal
             drinks={availableDrinks || []}
             onClose={() => setShowAddModal(false)}
-            onAdd={(drinkId, price) => addDrinkMutation.mutate({ drinkId, price })}
-            isLoading={addDrinkMutation.isPending}
+            onAdd={(drinks) => addDrinksMutation.mutate(drinks)}
+            isLoading={addDrinksMutation.isPending}
           />
         )}
 
@@ -308,32 +309,87 @@ function AddDrinkModal({
 }: {
   drinks: Drink[];
   onClose: () => void;
-  onAdd: (drinkId: string, price: number) => void;
+  onAdd: (drinks: Array<{ drinkId: string; price: number }>) => void;
   isLoading: boolean;
 }) {
-  const [selectedDrinkId, setSelectedDrinkId] = useState('');
-  const [price, setPrice] = useState('5.50');
+  const [selectedDrinks, setSelectedDrinks] = useState<Set<string>>(new Set());
+  const [globalPrice, setGlobalPrice] = useState('5.50');
+  const [customPrices, setCustomPrices] = useState<Map<string, string>>(new Map());
+  const [useSamePrice, setUseSamePrice] = useState(true);
   const [search, setSearch] = useState('');
 
   const filteredDrinks = drinks.filter((d) =>
     d.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Toggle sélection d'un drink
+  const toggleDrink = (drinkId: string) => {
+    const newSelected = new Set(selectedDrinks);
+    if (newSelected.has(drinkId)) {
+      newSelected.delete(drinkId);
+      // Supprimer le prix custom
+      const newCustomPrices = new Map(customPrices);
+      newCustomPrices.delete(drinkId);
+      setCustomPrices(newCustomPrices);
+    } else {
+      newSelected.add(drinkId);
+    }
+    setSelectedDrinks(newSelected);
+  };
+
+  // Tout sélectionner / désélectionner
+  const toggleAll = () => {
+    if (selectedDrinks.size === filteredDrinks.length) {
+      setSelectedDrinks(new Set());
+      setCustomPrices(new Map());
+    } else {
+      setSelectedDrinks(new Set(filteredDrinks.map(d => d.id)));
+    }
+  };
+
+  // Mettre à jour un prix custom
+  const updateCustomPrice = (drinkId: string, price: string) => {
+    const newCustomPrices = new Map(customPrices);
+    newCustomPrices.set(drinkId, price);
+    setCustomPrices(newCustomPrices);
+  };
+
   const handleSubmit = () => {
-    if (!selectedDrinkId || !price) return;
-    onAdd(selectedDrinkId, parseFloat(price));
+    if (selectedDrinks.size === 0) return;
+
+    const drinksToAdd = Array.from(selectedDrinks).map(drinkId => ({
+      drinkId,
+      price: useSamePrice 
+        ? parseFloat(globalPrice) 
+        : parseFloat(customPrices.get(drinkId) || globalPrice),
+    }));
+
+    onAdd(drinksToAdd);
   };
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+      <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-slate-700">
-          <h2 className="text-2xl font-bold text-white">Ajouter un shooter</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Ajouter des shooters</h2>
+              <p className="text-slate-400 text-sm mt-1">
+                {selectedDrinks.size} shooter{selectedDrinks.size > 1 ? 's' : ''} sélectionné{selectedDrinks.size > 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              onClick={toggleAll}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm"
+            >
+              {selectedDrinks.size === filteredDrinks.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Search */}
           <div className="mb-4">
             <input
@@ -345,63 +401,162 @@ function AddDrinkModal({
             />
           </div>
 
-          {/* Liste des drinks */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            {filteredDrinks.map((drink) => (
+          {/* Prix global ou individuel */}
+          <div className="mb-6 p-4 bg-slate-700/50 rounded-lg">
+            <div className="flex items-center gap-4 mb-4">
               <button
-                key={drink.id}
-                onClick={() => setSelectedDrinkId(drink.id)}
-                className={`p-4 rounded-lg border-2 transition-all text-left ${
-                  selectedDrinkId === drink.id
-                    ? 'border-orange-500 bg-orange-500/10'
-                    : 'border-slate-700 hover:border-slate-600'
+                onClick={() => setUseSamePrice(true)}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                  useSamePrice
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
                 }`}
               >
-                <img
-                  src={drink.imageUrl}
-                  alt={drink.name}
-                  className="w-full h-32 object-cover rounded-lg mb-2"
-                />
-                <div className="text-white font-semibold">{drink.name}</div>
-                <div className="text-slate-400 text-sm">
-                  {drink.type} • {drink.alcoholLevel}°
-                </div>
+                Prix identique
               </button>
-            ))}
+              <button
+                onClick={() => setUseSamePrice(false)}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                  !useSamePrice
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                }`}
+              >
+                Prix différents
+              </button>
+            </div>
+
+            {useSamePrice && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Prix pour tous (€)
+                </label>
+                <input
+                  type="number"
+                  step="0.10"
+                  value={globalPrice}
+                  onChange={(e) => setGlobalPrice(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            )}
+
+            {!useSamePrice && (
+              <p className="text-slate-400 text-sm">
+                Définissez un prix pour chaque shooter sélectionné ci-dessous
+              </p>
+            )}
           </div>
 
-          {/* Prix */}
-          {selectedDrinkId && (
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Prix (€)
-              </label>
-              <input
-                type="number"
-                step="0.10"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
+          {/* Liste des drinks */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredDrinks.map((drink) => {
+              const isSelected = selectedDrinks.has(drink.id);
+              
+              return (
+                <div
+                  key={drink.id}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    isSelected
+                      ? 'border-orange-500 bg-orange-500/10'
+                      : 'border-slate-700 hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex gap-4">
+                    {/* Checkbox */}
+                    <div className="flex-shrink-0">
+                      <button
+                        onClick={() => toggleDrink(drink.id)}
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? 'bg-orange-600 border-orange-600'
+                            : 'border-slate-600 hover:border-slate-500'
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Image */}
+                    <img
+                      src={drink.imageUrl}
+                      alt={drink.name}
+                      className="w-20 h-20 object-cover rounded-lg cursor-pointer"
+                      onClick={() => toggleDrink(drink.id)}
+                    />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div 
+                        className="text-white font-semibold mb-1 cursor-pointer truncate"
+                        onClick={() => toggleDrink(drink.id)}
+                      >
+                        {drink.name}
+                      </div>
+                      <div className="text-slate-400 text-sm mb-2">
+                        {drink.type} • {drink.alcoholLevel}°
+                      </div>
+
+                      {/* Prix individuel si mode prix différents */}
+                      {!useSamePrice && isSelected && (
+                        <input
+                          type="number"
+                          step="0.10"
+                          value={customPrices.get(drink.id) || globalPrice}
+                          onChange={(e) => updateCustomPrice(drink.id, e.target.value)}
+                          placeholder="Prix (€)"
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Empty state */}
+          {filteredDrinks.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-slate-400 mb-2">Aucun shooter trouvé</div>
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="text-orange-400 hover:text-orange-300 text-sm"
+                >
+                  Réinitialiser la recherche
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-700 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!selectedDrinkId || !price || isLoading}
-            className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 text-white rounded-lg transition-colors"
-          >
-            {isLoading ? 'Ajout...' : 'Ajouter'}
-          </button>
+        <div className="p-6 border-t border-slate-700">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={selectedDrinks.size === 0 || isLoading}
+              className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 text-white rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? (
+                'Ajout en cours...'
+              ) : (
+                `Ajouter ${selectedDrinks.size} shooter${selectedDrinks.size > 1 ? 's' : ''}`
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
