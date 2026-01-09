@@ -4,77 +4,122 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/lib/api';
-import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { drinksApi } from '@/lib/api';
+import { useBarStore } from '@/store/barStore';
+import { Plus, Edit, Trash2, Search, AlertTriangle } from 'lucide-react';
 
 interface Drink {
   id: string;
   name: string;
   type: 'SHOOTER' | 'COCKTAIL';
-  alcoholLevel: number;
+  alcoholLevel?: number;
   imageUrl: string;
-  ingredients: string[];
+  ingredients?: string[];
   description?: string;
   createdAt: string;
 }
 
 export default function CatalogPage() {
   const queryClient = useQueryClient();
+  const selectedBar = useBarStore((state) => state.selectedBar);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedDrink, setSelectedDrink] = useState<Drink | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'SHOOTER' | 'COCKTAIL'>('ALL');
 
-  // Charger tous les drinks
+  // ⭐ Charger tous les drinks avec barId
   const { data: drinks, isLoading } = useQuery<Drink[]>({
-    queryKey: ['all-drinks'],
+    queryKey: ['all-drinks', selectedBar?.id],
     queryFn: async () => {
-      const { data } = await api.get('/drinks/catalog/all');
+      if (!selectedBar?.id) {
+        throw new Error('Aucun bar sélectionné');
+      }
+      const { data } = await drinksApi.getAllDrinks(selectedBar.id);
       return data;
     },
+    enabled: !!selectedBar?.id,
   });
 
   // Filtrer les drinks
-  const filteredDrinks = drinks
-    ?.filter((d) => {
-      const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = filterType === 'ALL' || d.type === filterType;
-      return matchesSearch && matchesType;
-    });
+  const filteredDrinks = drinks?.filter((d) => {
+    const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = filterType === 'ALL' || d.type === filterType;
+    return matchesSearch && matchesType;
+  });
 
   // Mutation pour créer un drink
   const createDrinkMutation = useMutation({
     mutationFn: async (data: {
       name: string;
       type: 'SHOOTER' | 'COCKTAIL';
-      alcoholLevel: number;
-      ingredients: string[];
+      alcoholLevel?: number;
+      ingredients?: string[];
       description?: string;
       imageUrl: string;
     }) => {
-      await api.post('/drinks/catalog', data);
+      await drinksApi.createDrink({
+        ...data,
+        barId: selectedBar!.id, // ⭐ Ajouter barId
+        isPublic: false,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-drinks'] });
+      queryClient.invalidateQueries({ queryKey: ['all-drinks', selectedBar?.id] });
       setShowCreateModal(false);
+    },
+  });
+
+  const updateDrinkMutation = useMutation({
+    mutationFn: async (data: {
+      name?: string;
+      type?: 'SHOOTER' | 'COCKTAIL';
+      alcoholLevel?: number;
+      ingredients?: string[];
+      description?: string;
+      imageUrl?: string;
+    }) => {
+      if (!selectedDrink) throw new Error('No drink selected');
+      await drinksApi.updateDrink(selectedDrink.id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-drinks', selectedBar?.id] });
+      setShowEditModal(false);
+      setSelectedDrink(null);
     },
   });
 
   // Mutation pour supprimer un drink
   const deleteDrinkMutation = useMutation({
     mutationFn: async (drinkId: string) => {
-      await api.delete(`/drinks/catalog/${drinkId}`);
+      await drinksApi.deleteDrink(drinkId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-drinks'] });
+      queryClient.invalidateQueries({ queryKey: ['all-drinks', selectedBar?.id] });
     },
   });
+
+  // ⭐ Si pas de bar sélectionné
+  if (!selectedBar) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="mx-auto text-orange-400 mb-4" size={64} />
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Aucun bar sélectionné
+          </h2>
+          <p className="text-slate-400">
+            Sélectionnez un bar pour accéder au catalogue
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Chargement...</div>
+        <div className="text-white text-xl">Chargement du catalogue...</div>
       </div>
     );
   }
@@ -189,25 +234,31 @@ export default function CatalogPage() {
                     {drink.name}
                   </h3>
                   <div className="text-slate-400 text-sm mb-3">
-                    {drink.alcoholLevel}° • {drink.ingredients.length} ingrédient{drink.ingredients.length > 1 ? 's' : ''}
+                    {drink.alcoholLevel && `${drink.alcoholLevel}° • `}
+                    {drink.ingredients && drink.ingredients.length > 0 
+                      ? `${drink.ingredients.length} ingrédient${drink.ingredients.length > 1 ? 's' : ''}`
+                      : 'Pas d\'ingrédients'
+                    }
                   </div>
 
                   {/* Ingrédients */}
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {drink.ingredients.slice(0, 3).map((ingredient, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded"
-                      >
-                        {ingredient}
-                      </span>
-                    ))}
-                    {drink.ingredients.length > 3 && (
-                      <span className="px-2 py-1 bg-slate-700 text-slate-400 text-xs rounded">
-                        +{drink.ingredients.length - 3}
-                      </span>
-                    )}
-                  </div>
+                  {drink.ingredients && drink.ingredients.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {drink.ingredients.slice(0, 3).map((ingredient, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded"
+                        >
+                          {ingredient}
+                        </span>
+                      ))}
+                      {drink.ingredients.length > 3 && (
+                        <span className="px-2 py-1 bg-slate-700 text-slate-400 text-xs rounded">
+                          +{drink.ingredients.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-2">
@@ -255,11 +306,8 @@ export default function CatalogPage() {
               setShowEditModal(false);
               setSelectedDrink(null);
             }}
-            onUpdate={(data) => {
-              // TODO: Implémenter l'update
-              console.log('Update:', data);
-            }}
-            isLoading={false}
+            onUpdate={(data) => updateDrinkMutation.mutate(data)} // ⭐ UTILISER LA MUTATION
+            isLoading={updateDrinkMutation.isPending}
           />
         )}
       </div>
@@ -277,8 +325,8 @@ function CreateDrinkModal({
   onCreate: (data: {
     name: string;
     type: 'SHOOTER' | 'COCKTAIL';
-    alcoholLevel: number;
-    ingredients: string[];
+    alcoholLevel?: number;
+    ingredients?: string[];
     description?: string;
     imageUrl: string;
   }) => void;
@@ -286,7 +334,7 @@ function CreateDrinkModal({
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<'SHOOTER' | 'COCKTAIL'>('SHOOTER');
-  const [alcoholLevel, setAlcoholLevel] = useState('40');
+  const [alcoholLevel, setAlcoholLevel] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
   const [ingredientInput, setIngredientInput] = useState('');
@@ -304,7 +352,7 @@ function CreateDrinkModal({
   };
 
   const handleSubmit = () => {
-    if (!name || !imageUrl || ingredients.length === 0) {
+    if (!name || !imageUrl) {
       alert('Veuillez remplir tous les champs obligatoires');
       return;
     }
@@ -312,8 +360,8 @@ function CreateDrinkModal({
     onCreate({
       name,
       type,
-      alcoholLevel: parseFloat(alcoholLevel),
-      ingredients,
+      alcoholLevel: alcoholLevel ? parseFloat(alcoholLevel) : undefined,
+      ingredients: ingredients.length > 0 ? ingredients : undefined,
       description: description || undefined,
       imageUrl,
     });
@@ -377,7 +425,7 @@ function CreateDrinkModal({
           {/* Degré d'alcool */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Degré d'alcool (°) *
+              Degré d'alcool (°) <span className="text-slate-500">(optionnel)</span>
             </label>
             <input
               type="number"
@@ -415,7 +463,7 @@ function CreateDrinkModal({
           {/* Ingrédients */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Ingrédients *
+              Ingrédients <span className="text-slate-500">(optionnel)</span>
             </label>
             <div className="flex gap-2 mb-2">
               <input
@@ -501,19 +549,215 @@ function EditDrinkModal({
   onUpdate: (data: any) => void;
   isLoading: boolean;
 }) {
+  const [name, setName] = useState(drink.name);
+  const [type, setType] = useState<'SHOOTER' | 'COCKTAIL'>(drink.type);
+  const [alcoholLevel, setAlcoholLevel] = useState(drink.alcoholLevel?.toString() || '');
+  const [imageUrl, setImageUrl] = useState(drink.imageUrl);
+  const [description, setDescription] = useState(drink.description || '');
+  const [ingredientInput, setIngredientInput] = useState('');
+  const [ingredients, setIngredients] = useState<string[]>(drink.ingredients || []);
+
+  const addIngredient = () => {
+    if (ingredientInput.trim()) {
+      setIngredients([...ingredients, ingredientInput.trim()]);
+      setIngredientInput('');
+    }
+  };
+
+  const removeIngredient = (index: number) => {
+    setIngredients(ingredients.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = () => {
+    if (!name || !imageUrl) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    onUpdate({
+      name,
+      type,
+      alcoholLevel: alcoholLevel ? parseFloat(alcoholLevel) : undefined,
+      ingredients: ingredients.length > 0 ? ingredients : undefined,
+      description: description || undefined,
+      imageUrl,
+    });
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6">
-        <h2 className="text-2xl font-bold text-white mb-4">Modifier</h2>
-        <p className="text-slate-400 mb-4">
-          La modification des drinks sera disponible prochainement.
-        </p>
-        <button
-          onClick={onClose}
-          className="w-full px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-        >
-          Fermer
-        </button>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-slate-800 rounded-2xl max-w-2xl w-full my-8">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-700">
+          <h2 className="text-2xl font-bold text-white">Modifier le drink</h2>
+          <p className="text-slate-400 text-sm mt-1">{drink.name}</p>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Nom */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Nom *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Tequila Sunrise Shot"
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* Type */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Type *
+            </label>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setType('SHOOTER')}
+                className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                  type === 'SHOOTER'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                }`}
+              >
+                🥃 Shooter
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('COCKTAIL')}
+                className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+                  type === 'COCKTAIL'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                }`}
+              >
+                🍹 Cocktail
+              </button>
+            </div>
+          </div>
+
+          {/* Degré d'alcool */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Degré d'alcool (°) <span className="text-slate-500">(optionnel)</span>
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={alcoholLevel}
+              onChange={(e) => setAlcoholLevel(e.target.value)}
+              placeholder="40"
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
+          {/* URL de l'image */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              URL de l'image *
+            </label>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+            {imageUrl && (
+              <div className="mt-2">
+                <img
+                  src={imageUrl}
+                  alt="Aperçu"
+                  className="w-full h-40 object-cover rounded-lg"
+                  onError={(e) => {
+                    console.log('Image load error');
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Ingrédients */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Ingrédients <span className="text-slate-500">(optionnel)</span>
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={ingredientInput}
+                onChange={(e) => setIngredientInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addIngredient();
+                  }
+                }}
+                placeholder="Ajouter un ingrédient..."
+                className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+              <button
+                type="button"
+                onClick={addIngredient}
+                className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ingredients.map((ingredient, i) => (
+                <span
+                  key={i}
+                  className="px-3 py-1 bg-slate-700 text-white rounded-full flex items-center gap-2"
+                >
+                  {ingredient}
+                  <button
+                    type="button"
+                    onClick={() => removeIngredient(i)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Description <span className="text-slate-500">(optionnel)</span>
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Description du drink..."
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-slate-700 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isLoading}
+            className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            {isLoading ? 'Modification...' : 'Enregistrer'}
+          </button>
+        </div>
       </div>
     </div>
   );

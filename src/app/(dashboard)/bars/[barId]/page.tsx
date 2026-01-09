@@ -4,25 +4,29 @@
 
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { barsApi } from '@/lib/api';
 import { useBarStore } from '@/store/barStore';
+import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
-import { QrCode } from 'lucide-react';
 import { 
+  QrCode,
   TrendingUp, 
   DollarSign, 
   Clock, 
   Camera, 
-  Users,
-  Star,
   Package,
+  Power,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 
 export default function BarDetailPage() {
   const params = useParams();
   const barId = params.barId as string;
+  const queryClient = useQueryClient();
   const { bars, setSelectedBar } = useBarStore();
+  const user = useAuthStore((state) => state.user);
 
   // Sélectionner le bar courant
   useEffect(() => {
@@ -32,12 +36,24 @@ export default function BarDetailPage() {
     }
   }, [barId, bars, setSelectedBar]);
 
+  const currentBar = bars.find((b) => b.id === barId);
+  const isOwner = currentBar?.role === 'OWNER';
+
   // Charger les stats
   const { data: stats, isLoading } = useQuery({
     queryKey: ['bar-stats', barId],
     queryFn: async () => {
       const { data } = await barsApi.getBarStats(barId);
       return data;
+    },
+  });
+
+  // ⭐ Mutation pour activer le bar
+  const activateMutation = useMutation({
+    mutationFn: () => barsApi.activateBar(barId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-bars'] });
+      queryClient.invalidateQueries({ queryKey: ['bar-stats', barId] });
     },
   });
 
@@ -52,21 +68,90 @@ export default function BarDetailPage() {
   return (
     <div className="min-h-screen bg-slate-900 py-8">
       <div className="container mx-auto px-6">
-        {/* Header */}
+        {/* Header avec statut et bouton activer */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Tableau de bord
-          </h1>
-          <p className="text-slate-400">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-bold text-white">
+                Tableau de bord
+              </h1>
+              
+              {/* ⭐ Badge statut */}
+              {currentBar && (
+                <span
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold ${
+                    currentBar.active
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-orange-500/20 text-orange-400'
+                  }`}
+                >
+                  {currentBar.active ? (
+                    <>
+                      <CheckCircle size={20} />
+                      Actif
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={20} />
+                      Inactif
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              {/* ⭐ Bouton activer (uniquement pour OWNER et si inactif) */}
+              {isOwner && currentBar && !currentBar.active && (
+                <button
+                  onClick={() => activateMutation.mutate()}
+                  disabled={activateMutation.isPending}
+                  className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white rounded-lg transition-colors font-medium"
+                >
+                  <Power size={20} />
+                  {activateMutation.isPending ? 'Activation...' : 'Activer mon bar'}
+                </button>
+              )}
+
+              <Link
+                href={`/bars/${barId}/qrcode`}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+              >
+                <QrCode size={20} />
+                QR Code
+              </Link>
+            </div>
+          </div>
+
+          {/* ⭐ Message d'avertissement si inactif */}
+          {currentBar && !currentBar.active && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="text-orange-400 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h3 className="text-orange-400 font-semibold mb-1">
+                    Bar inactif
+                  </h3>
+                  <p className="text-orange-200 text-sm">
+                    {isOwner ? (
+                      <>
+                        Votre bar est actuellement inactif. Les clients ne peuvent pas commander.
+                        Cliquez sur "Activer mon bar" pour le rendre accessible.
+                      </>
+                    ) : (
+                      <>
+                        Ce bar est actuellement inactif. Seul le propriétaire peut l'activer.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-slate-400 mt-4">
             Vue d'ensemble de votre activité
           </p>
-          <Link
-            href={`/bars/${barId}/qrcode`}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-          >
-            <QrCode size={20} />
-            Voir le QR Code
-          </Link>
         </div>
 
         {/* Stats Grid */}
@@ -96,7 +181,7 @@ export default function BarDetailPage() {
             <div className="text-3xl font-bold mb-1">
               {stats?.totalRevenue?.toFixed(2) || '0.00'}€
             </div>
-            <div className="text-green-100 text-sm">Revenu estimé</div>
+            <div className="text-green-100 text-sm">Revenu total</div>
           </div>
 
           {/* Commandes en attente */}
@@ -154,7 +239,7 @@ export default function BarDetailPage() {
                     {index + 1}
                   </div>
 
-                  {/* ⭐ Image du shooter */}
+                  {/* Image du shooter */}
                   {drink.drinkImage && (
                     <img 
                       src={drink.drinkImage} 
@@ -163,7 +248,7 @@ export default function BarDetailPage() {
                     />
                   )}
 
-                  {/* ⭐ Nom du shooter */}
+                  {/* Nom du shooter */}
                   <div className="flex-1">
                     <div className="text-white font-medium">
                       {drink.drinkName}

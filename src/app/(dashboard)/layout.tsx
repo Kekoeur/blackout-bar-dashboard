@@ -2,10 +2,11 @@
 
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useBarStore } from '@/store/barStore';
-import { LogOut, Store, Settings, BarChart3 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { LogOut, Store } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 export default function DashboardLayout({
@@ -14,13 +15,50 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const pathname = usePathname();
+  const { user, logout, token } = useAuthStore();
   const selectedBar = useBarStore((state) => state.selectedBar);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    // Vérifier l'authentification au montage
+    const checkAuth = () => {
+      const storedToken = localStorage.getItem('bar_dashboard_token');
+      
+      console.log('🔐 [DashboardLayout] Checking auth...'); // ⭐ DEBUG
+      console.log('🔐 [DashboardLayout] Token in localStorage:', storedToken ? 'YES' : 'NO'); // ⭐ DEBUG
+      console.log('🔐 [DashboardLayout] Current pathname:', pathname); // ⭐ DEBUG
+
+      if (!storedToken) {
+        console.log('❌ [DashboardLayout] No token, redirecting to login'); // ⭐ DEBUG
+        router.replace('/login'); // ⭐ Utiliser replace au lieu de push
+        return;
+      }
+
+      console.log('✅ [DashboardLayout] Token found, user authenticated'); // ⭐ DEBUG
+      setIsChecking(false);
+    };
+
+    checkAuth();
+  }, [router, pathname]);
 
   const handleLogout = () => {
+    console.log('🚪 [DashboardLayout] Logging out'); // ⭐ DEBUG
     logout();
-    router.push('/login');
+    router.replace('/login');
   };
+
+  // Pendant la vérification, afficher un loader
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500 mb-4"></div>
+          <div className="text-white text-xl">Chargement...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -77,6 +115,12 @@ export default function DashboardLayout({
                     Menu
                   </Link>
                   <Link
+                    href={`/bars/${selectedBar.id}/team`}
+                    className="text-slate-300 hover:text-white transition-colors"
+                  >
+                    Équipe
+                  </Link>
+                  <Link
                     href="/catalog"
                     className="text-slate-300 hover:text-white transition-colors"
                   >
@@ -89,6 +133,16 @@ export default function DashboardLayout({
                     QR Code
                   </Link>
                 </>
+              )}
+
+              {/* Admin link - visible seulement pour les super admins */}
+              {user?.isSuperAdmin && (
+                <Link
+                  href="/admin"
+                  className="text-red-400 hover:text-red-300 transition-colors font-semibold"
+                >
+                  🔐 Admin
+                </Link>
               )}
             </div>
 

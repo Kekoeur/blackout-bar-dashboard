@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data } = await authApi.login(email, password);
+      const { data } = await authApi.login({email, password});
       login(data.token, data.user);
       await new Promise(resolve => setTimeout(resolve, 100));
       router.push('/');

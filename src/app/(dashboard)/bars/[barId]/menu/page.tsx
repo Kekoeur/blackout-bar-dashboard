@@ -18,9 +18,9 @@ interface MenuDrink {
     id: string;
     name: string;
     type: string;
-    alcoholLevel: number;
+    alcoholLevel?: number;
     imageUrl: string;
-    ingredients: string[];
+    ingredients?: string[];
     description?: string;
   };
 }
@@ -29,9 +29,9 @@ interface Drink {
   id: string;
   name: string;
   type: string;
-  alcoholLevel: number;
+  alcoholLevel?: number;
   imageUrl: string;
-  ingredients: string[];
+  ingredients?: string[];
   description?: string;
 }
 
