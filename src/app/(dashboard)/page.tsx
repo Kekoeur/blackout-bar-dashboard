@@ -1,5 +1,3 @@
-// apps/bar-dashboard/src/app/(dashboard)/page.tsx
-
 'use client';
 
 import { useEffect } from 'react';
@@ -8,77 +6,92 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { useBarStore } from '@/store/barStore';
 import { barsApi } from '@/lib/api';
-import { Power, Plus, Store, ChevronRight, AlertTriangle, CheckCircle, Crown, Shield, Users as UsersIcon, Eye } from 'lucide-react';
+import {
+  Power,
+  Plus,
+  Store,
+  ChevronRight,
+  AlertTriangle,
+  CheckCircle,
+  Crown,
+  Shield,
+  Users as UsersIcon,
+  Eye,
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  const { user, token, hydrated } = useAuthStore();
   const { setBars, setSelectedBar } = useBarStore();
 
-  // Rediriger si non authentifié
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router]);
-
-  // Charger les bars
+  // Charger les bars (uniquement quand auth prête)
   const { data: bars, isLoading } = useQuery({
     queryKey: ['my-bars'],
     queryFn: async () => {
       const { data } = await barsApi.getMyBars();
       return data;
     },
-    enabled: isAuthenticated,
+    enabled: hydrated && !!token,
   });
 
   useEffect(() => {
-    if (bars) {
+    if (bars && bars.length > 0) {
       setBars(bars);
-      // Sélectionner le premier bar par défaut
-      if (bars.length > 0) {
-        setSelectedBar(bars[0]);
-      }
+      setSelectedBar(bars[0]);
     }
   }, [bars, setBars, setSelectedBar]);
 
-  // Helper pour les icônes de rôle
+  // Helpers rôles
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'OWNER': return Crown;
-      case 'MANAGER': return Shield;
-      case 'STAFF': return UsersIcon;
-      case 'VIEWER': return Eye;
-      default: return Eye;
+      case 'OWNER':
+        return Crown;
+      case 'MANAGER':
+        return Shield;
+      case 'STAFF':
+        return UsersIcon;
+      case 'VIEWER':
+      default:
+        return Eye;
     }
   };
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case 'OWNER': return 'Propriétaire';
-      case 'MANAGER': return 'Manager';
-      case 'STAFF': return 'Staff';
-      case 'VIEWER': return 'Viewer';
-      default: return role;
+      case 'OWNER':
+        return 'Propriétaire';
+      case 'MANAGER':
+        return 'Manager';
+      case 'STAFF':
+        return 'Staff';
+      case 'VIEWER':
+        return 'Viewer';
+      default:
+        return role;
     }
   };
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'OWNER': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'MANAGER': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'STAFF': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'VIEWER': return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+      case 'OWNER':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'MANAGER':
+        return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+      case 'STAFF':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'VIEWER':
+      default:
+        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };
 
-  if (isLoading) {
+  // Loader global
+  if (!hydrated || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Chargement...</div>
+        <div className="text-white text-xl">Chargement…</div>
       </div>
     );
   }
@@ -110,7 +123,7 @@ export default function DashboardPage() {
             </p>
             <button
               onClick={() => router.push('/bars/new')}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg"
             >
               <Plus size={20} />
               Créer mon premier bar
@@ -121,12 +134,12 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {bars?.map((bar: any) => {
               const RoleIcon = getRoleIcon(bar.role);
-              
+
               return (
                 <Link
                   key={bar.id}
                   href={`/bars/${bar.id}`}
-                  className="group bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500 transition-all cursor-pointer"
+                  className="group bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-orange-500 transition-all"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -134,18 +147,17 @@ export default function DashboardPage() {
                         <Store className="text-white" size={24} />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-white group-hover:text-orange-400 transition-colors">
+                        <h3 className="text-xl font-bold text-white group-hover:text-orange-400">
                           {bar.name}
                         </h3>
                         <p className="text-slate-400 text-sm">{bar.city}</p>
                       </div>
                     </div>
-                    <ChevronRight className="text-slate-400 group-hover:text-orange-400 transition-colors" />
+                    <ChevronRight className="text-slate-400 group-hover:text-orange-400" />
                   </div>
 
-                  {/* ⭐ Badges statut + rôle */}
+                  {/* Badges */}
                   <div className="flex gap-2 mb-4">
-                    {/* Badge statut */}
                     <span
                       className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${
                         bar.active
@@ -155,19 +167,20 @@ export default function DashboardPage() {
                     >
                       {bar.active ? (
                         <>
-                          <CheckCircle size={12} />
-                          Actif
+                          <CheckCircle size={12} /> Actif
                         </>
                       ) : (
                         <>
-                          <AlertTriangle size={12} />
-                          Inactif
+                          <AlertTriangle size={12} /> Inactif
                         </>
                       )}
                     </span>
 
-                    {/* Badge rôle */}
-                    <span className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${getRoleColor(bar.role)}`}>
+                    <span
+                      className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border ${getRoleColor(
+                        bar.role
+                      )}`}
+                    >
                       <RoleIcon size={12} />
                       {getRoleLabel(bar.role)}
                     </span>
@@ -177,7 +190,6 @@ export default function DashboardPage() {
                     📍 {bar.address}
                   </div>
 
-                  {/* ⭐ Message si inactif et owner */}
                   {!bar.active && bar.role === 'OWNER' && (
                     <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                       <p className="text-orange-400 text-xs flex items-center gap-2">

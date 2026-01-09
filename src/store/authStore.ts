@@ -1,5 +1,3 @@
-// apps/bar-dashboard/src/store/authStore.ts
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -13,16 +11,17 @@ interface BarUser {
   id: string;
   email: string;
   name: string;
-  isSuperAdmin?: boolean; // ⭐ AJOUTER
+  isSuperAdmin?: boolean;
   bars: Bar[];
 }
 
 interface AuthState {
   token: string | null;
   user: BarUser | null;
-  isAuthenticated: boolean;
+  hydrated: boolean;
   login: (token: string, user: BarUser) => void;
   logout: () => void;
+  setHydrated: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -30,26 +29,28 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
-      isAuthenticated: false,
-      
+      hydrated: false,
+
       login: (token, user) => {
-        console.log('✅ [AuthStore] Login called'); // ⭐ DEBUG
-        console.log('✅ [AuthStore] Token:', token.substring(0, 20) + '...'); // ⭐ DEBUG
-        console.log('✅ [AuthStore] User:', user); // ⭐ DEBUG
-        
-        localStorage.setItem('bar_dashboard_token', token);
-        set({ token, user, isAuthenticated: true });
+        console.log('✅ [AuthStore] Login');
+        set({ token, user });
       },
-      
+
       logout: () => {
-        console.log('🚪 [AuthStore] Logout called'); // ⭐ DEBUG
-        
-        localStorage.removeItem('bar_dashboard_token');
-        set({ token: null, user: null, isAuthenticated: false });
+        console.log('🚪 [AuthStore] Logout');
+        set({ token: null, user: null });
+      },
+
+      setHydrated: () => {
+        set({ hydrated: true });
       },
     }),
     {
       name: 'bar-dashboard-auth',
+      onRehydrateStorage: () => (state) => {
+        console.log('🔄 [AuthStore] Hydrated from storage');
+        state?.setHydrated();
+      },
     }
   )
 );
