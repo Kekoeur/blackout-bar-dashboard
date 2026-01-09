@@ -124,6 +124,9 @@ export const menuApi = {
   
   addDrinkToMenu: (barId: string, data: { drinkId: string; price: number }) =>
     api.post(`/drinks/menu/${barId}`, data),
+
+  addDrinksToMenuBulk: (barId: string, drinks: Array<{ drinkId: string; price: number }>) =>
+    api.post(`/drinks/menu/${barId}/bulk`, { drinks }),
   
   updateMenuItem: (barId: string, drinkId: string, data: { price?: number; available?: boolean }) =>
     api.put(`/drinks/menu/${barId}/${drinkId}`, data),
