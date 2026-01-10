@@ -56,9 +56,15 @@ export const barsApi = {
   
   getBarStats: (barId: string) =>
     api.get(`/bar-management/bars/${barId}/stats`),
+  
+  getBarDetails: (barId: string) => 
+    api.get(`/bar-management/bars/${barId}`),
 
   activateBar: (barId: string) =>
     api.patch(`/bar-management/bars/${barId}/activate`),
+
+  deactivateBar: (barId: string) => 
+    api.patch(`/bar-management/bars/${barId}/deactivate`),
   
   getBarOrders: (barId: string, status?: string) =>
     api.get(`/orders/bar/${barId}`, { params: { status } }),
@@ -68,6 +74,15 @@ export const barsApi = {
   
   cancelOrder: (orderId: string) =>
     api.post(`/orders/${orderId}/cancel`),
+
+  geocodeBar: (barId: string) =>
+    api.patch(`/bar-management/bars/${barId}/geocode`),
+
+  updateCoordinates: (barId: string, data: { latitude: number; longitude: number }) => 
+    api.patch(`/bar-management/bars/${barId}/coordinates`, data),
+
+  updateBarAddress: (barId: string, data: { address: string; city: string; postalCode?: string }) =>
+    api.patch(`/bar-management/bars/${barId}/address`, data),
 };
 
 // =============== PHOTOS API ===============
