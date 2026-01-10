@@ -7,6 +7,8 @@ interface Bar {
   name: string;
   city: string;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   role: string;
   pendingOrders: number;
   pendingPhotos: number;
