@@ -1,3 +1,4 @@
+
 // apps/bar-dashboard/src/app/(dashboard)/admin/page.tsx
 
 'use client';
@@ -18,11 +19,15 @@ import {
   Users,
   Store,
   DollarSign,
+  ShoppingCart,
+  Smartphone,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'stats' | 'bars' | 'users'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'bars' | 'users' | 'orders' | 'mobile-users'>('stats');
 
   // Charger les stats globales
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -45,8 +50,8 @@ export default function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8">
-          {(['stats', 'bars', 'users'] as const).map((tab) => (
+        <div className="flex flex-wrap gap-2 mb-8">
+          {(['stats', 'bars', 'users', 'orders', 'mobile-users'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -58,7 +63,9 @@ export default function AdminPage() {
             >
               {tab === 'stats' && '📊 Statistiques'}
               {tab === 'bars' && '🏪 Bars'}
-              {tab === 'users' && '👥 Utilisateurs'}
+              {tab === 'users' && '👥 Utilisateurs Dashboard'}
+              {tab === 'orders' && '🛒 Commandes'}
+              {tab === 'mobile-users' && '📱 Utilisateurs Mobile'}
             </button>
           ))}
         </div>
@@ -67,6 +74,8 @@ export default function AdminPage() {
         {activeTab === 'stats' && <StatsTab stats={stats} isLoading={statsLoading} />}
         {activeTab === 'bars' && <BarsTab />}
         {activeTab === 'users' && <UsersTab />}
+        {activeTab === 'orders' && <OrdersTab />}
+        {activeTab === 'mobile-users' && <MobileUsersTab />}
       </div>
     </div>
   );
@@ -125,7 +134,7 @@ function StatsTab({ stats, isLoading }: { stats: any; isLoading: boolean }) {
             <TrendingUp size={20} className="text-white/60" />
           </div>
           <div className="text-3xl font-bold mb-1">{stats?.totalUsers || 0}</div>
-          <div className="text-purple-100 text-sm">Utilisateurs</div>
+          <div className="text-purple-100 text-sm">Utilisateurs Dashboard</div>
           <div className="text-purple-200 text-xs mt-2">
             Propriétaires et staff
           </div>
@@ -144,33 +153,6 @@ function StatsTab({ stats, isLoading }: { stats: any; isLoading: boolean }) {
           </div>
         </div>
       </div>
-
-      {/* Activité récente */}
-      {stats?.recentActivity && stats.recentActivity.length > 0 && (
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-xl font-bold text-white mb-6">
-            📈 Activité Récente
-          </h2>
-          <div className="space-y-4">
-            {stats.recentActivity.map((activity: any, index: number) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg"
-              >
-                <div>
-                  <div className="text-white font-medium">{activity.bar}</div>
-                  <div className="text-slate-400 text-sm">
-                    Commande par {activity.user}
-                  </div>
-                </div>
-                <div className="text-slate-400 text-sm">
-                  {new Date(activity.createdAt).toLocaleDateString('fr-FR')}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -198,6 +180,8 @@ function BarsTab() {
     mutationFn: (barId: string) => adminApi.toggleBarActive(barId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-bars'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      alert('✅ Statut du bar mis à jour !');
     },
   });
 
@@ -206,6 +190,11 @@ function BarsTab() {
     mutationFn: (barId: string) => adminApi.deleteBar(barId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-bars'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      alert('✅ Bar supprimé avec succès !');
+    },
+    onError: () => {
+      alert('❌ Erreur lors de la suppression du bar');
     },
   });
 
@@ -267,12 +256,70 @@ function BarsTab() {
       {/* Liste des bars */}
       <div className="grid grid-cols-1 gap-6">
         {filteredBars?.map((bar: any) => (
-          // ... reste du code identique
           <div
             key={bar.id}
             className="bg-slate-800 rounded-xl p-6 border border-slate-700"
           >
-            {/* ... contenu identique ... */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-xl font-bold text-white">{bar.name}</h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      bar.active
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-orange-500/20 text-orange-400'
+                    }`}
+                  >
+                    {bar.active ? '✓ Actif' : '⏸ Inactif'}
+                  </span>
+                </div>
+                <div className="text-slate-400 text-sm mb-2">{bar.city} • {bar.address}</div>
+                <div className="text-slate-500 text-xs">
+                  Créé le {new Date(bar.createdAt).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => toggleActiveMutation.mutate(bar.id)}
+                  disabled={toggleActiveMutation.isPending}
+                  className={`p-2 rounded-lg transition-colors ${
+                    bar.active
+                      ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                      : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                  }`}
+                  title={bar.active ? 'Désactiver' : 'Activer'}
+                >
+                  {bar.active ? <PowerOff size={20} /> : <Power size={20} />}
+                </button>
+                <button
+                  onClick={() => setSelectedBar(bar)}
+                  className="p-2 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors"
+                  title="Voir les détails"
+                >
+                  <Eye size={20} />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`⚠️ ATTENTION : Supprimer "${bar.name}" ?\n\nCette action est IRRÉVERSIBLE et supprimera :\n- Le bar\n- Tous les menus\n- Toutes les commandes\n- Toutes les photos\n- Tous les accès utilisateurs\n\nTapez le nom du bar pour confirmer : "${bar.name}"`)) {
+                      const confirmation = prompt(`Pour confirmer, tapez le nom exact du bar :\n"${bar.name}"`);
+                      if (confirmation === bar.name) {
+                        deleteBarMutation.mutate(bar.id);
+                      } else {
+                        alert('❌ Nom incorrect, suppression annulée');
+                      }
+                    }
+                  }}
+                  disabled={deleteBarMutation.isPending}
+                  className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
+                  title="Supprimer définitivement"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            </div>
           </div>
         ))}
 
@@ -925,6 +972,287 @@ function UsersTab() {
           onClose={() => setSelectedUser(null)}
         />
       )}
+    </div>
+  );
+}
+
+// =============== ONGLET COMMANDES (NOUVEAU) ===============
+
+function OrdersTab() {
+  const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'VALIDATED' | 'CANCELLED'>('ALL');
+
+  // Charger toutes les commandes
+  const { data: orders, isLoading } = useQuery({
+    queryKey: ['admin-orders', statusFilter],
+    queryFn: async () => {
+      const { data } = await adminApi.getAllOrders(statusFilter === 'ALL' ? undefined : statusFilter);
+      return data;
+    },
+  });
+
+  // Mutation pour supprimer
+  const deleteOrderMutation = useMutation({
+    mutationFn: (orderId: string) => adminApi.deleteOrder(orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      alert('✅ Commande supprimée avec succès !');
+    },
+  });
+
+  // Filtrer les commandes
+  const filteredOrders = orders?.filter((order: any) => {
+    return (
+      order.user?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.bar?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-white">Chargement...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-white">Commandes</h2>
+        <p className="text-slate-400">
+          {filteredOrders?.length || 0} / {orders?.length || 0} commande(s)
+        </p>
+      </div>
+
+      {/* Filtres */}
+      <div className="flex gap-4">
+        <input
+          type="text"
+          placeholder="Rechercher par utilisateur ou bar..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+        
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as any)}
+          className="px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+        >
+          <option value="ALL">Tous les statuts</option>
+          <option value="PENDING">En attente</option>
+          <option value="VALIDATED">Validées</option>
+          <option value="CANCELLED">Annulées</option>
+        </select>
+      </div>
+
+      {/* Liste des commandes */}
+      <div className="space-y-4">
+        {filteredOrders?.map((order: any) => (
+          <div
+            key={order.id}
+            className="bg-slate-800 rounded-xl p-6 border border-slate-700"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-lg font-bold text-white">
+                    {order.user?.username || 'Utilisateur inconnu'}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      order.status === 'VALIDATED'
+                        ? 'bg-green-500/20 text-green-400'
+                        : order.status === 'PENDING'
+                        ? 'bg-yellow-500/20 text-yellow-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {order.status === 'VALIDATED' && '✓ Validée'}
+                    {order.status === 'PENDING' && '⏳ En attente'}
+                    {order.status === 'CANCELLED' && '✗ Annulée'}
+                  </span>
+                </div>
+                <div className="text-slate-400 text-sm">
+                  Bar: {order.bar?.name || 'Bar inconnu'} • {new Date(order.createdAt).toLocaleString('fr-FR')}
+                </div>
+                <div className="text-slate-500 text-xs mt-1">
+                  ID: {order.id}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <button
+                onClick={() => {
+                  if (confirm(`Supprimer cette commande ?\n\nUtilisateur: ${order.user?.username}\nBar: ${order.bar?.name}\n\nCette action est irréversible.`)) {
+                    deleteOrderMutation.mutate(order.id);
+                  }
+                }}
+                disabled={deleteOrderMutation.isPending}
+                className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
+                title="Supprimer"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
+
+            {/* Items */}
+            {order.items && order.items.length > 0 && (
+              <div className="mt-4 p-3 bg-slate-700/50 rounded-lg">
+                <div className="text-slate-400 text-sm mb-2">
+                  {order.items.length} shooter{order.items.length > 1 ? 's' : ''}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Empty state */}
+        {filteredOrders?.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🛒</div>
+            <h3 className="text-xl font-bold text-white mb-2">
+              Aucune commande trouvée
+            </h3>
+            <p className="text-slate-400">
+              Essayez de modifier vos filtres de recherche
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============== ONGLET UTILISATEURS MOBILE (NOUVEAU) ===============
+
+function MobileUsersTab() {
+  const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Charger tous les utilisateurs mobile
+  const { data: mobileUsers, isLoading } = useQuery({
+    queryKey: ['admin-mobile-users'],
+    queryFn: async () => {
+      const { data } = await adminApi.getAllMobileUsers();
+      return data;
+    },
+  });
+
+  // Mutation pour supprimer
+  const deleteMobileUserMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.deleteMobileUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-mobile-users'] });
+      alert('✅ Utilisateur mobile supprimé avec succès !');
+    },
+  });
+
+  // Filtrer les utilisateurs
+  const filteredUsers = mobileUsers?.filter((user: any) => {
+    return (
+      user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-white">Chargement...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-white">Utilisateurs Mobile</h2>
+        <p className="text-slate-400">
+          {filteredUsers?.length || 0} / {mobileUsers?.length || 0} utilisateur(s)
+        </p>
+      </div>
+
+      {/* Recherche */}
+      <div>
+        <input
+          type="text"
+          placeholder="Rechercher par nom d'utilisateur ou email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+
+      {/* Liste des utilisateurs */}
+      <div className="space-y-4">
+        {filteredUsers?.map((user: any) => (
+          <div
+            key={user.id}
+            className="bg-slate-800 rounded-xl p-6 border border-slate-700"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-4 flex-1">
+                {/* Avatar */}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
+                  {user.username?.charAt(0).toUpperCase() || 'U'}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-bold text-white">
+                      {user.username}
+                    </h3>
+                    <Smartphone size={16} className="text-slate-400" />
+                  </div>
+                  <div className="text-slate-400 text-sm mb-3">
+                    {user.email}
+                  </div>
+                  <div className="text-slate-500 text-xs">
+                    Inscrit le {new Date(user.createdAt).toLocaleDateString('fr-FR')}
+                    {user._count?.orders > 0 && (
+                      <> • {user._count.orders} commande{user._count.orders > 1 ? 's' : ''}</>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <button
+                onClick={() => {
+                  if (confirm(`Supprimer l'utilisateur "${user.username}" ?\n\nCette action supprimera :\n- Le compte utilisateur\n- Toutes ses commandes\n- Toutes ses photos\n- Tous ses amis\n\nCette action est irréversible.`)) {
+                    deleteMobileUserMutation.mutate(user.id);
+                  }
+                }}
+                disabled={deleteMobileUserMutation.isPending}
+                className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
+                title="Supprimer"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Empty state */}
+        {filteredUsers?.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📱</div>
+            <h3 className="text-xl font-bold text-white mb-2">
+              Aucun utilisateur trouvé
+            </h3>
+            <p className="text-slate-400">
+              Essayez de modifier votre recherche
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

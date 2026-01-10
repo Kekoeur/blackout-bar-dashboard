@@ -207,6 +207,30 @@ export const adminApi = {
   // Promotion de rôle
   promoteToOwner: (userId: string, barId: string) =>
     api.post(`/admin/users/${userId}/promote-owner`, { barId }),
+
+  getAllOrders: (status?: string) =>
+    api.get('/admin/orders', { params: { status } }),
+  
+  // Supprimer une commande
+  deleteOrder: (orderId: string) =>
+    api.delete(`/admin/orders/${orderId}`),
+  
+  // Récupérer tous les utilisateurs mobile
+  getAllMobileUsers: () =>
+    api.get('/admin/mobile-users'),
+  
+  // Supprimer un utilisateur mobile
+  deleteMobileUser: (userId: string) =>
+    api.delete(`/admin/mobile-users/${userId}`),
+
+  listApiKeys: () =>
+    api.get('/admin/api-keys'),
+
+  createApiKey: (data: { name: string; permissions: string[] }) =>
+    api.post('/admin/api-keys', data),
+
+  revokeApiKey: (apiKeyId: string) =>
+    api.delete(`/admin/api-keys/${apiKeyId}`),
 };
 
 // =============== AUTH API ===============
